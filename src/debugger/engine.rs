@@ -122,7 +122,7 @@ impl DebuggerEngine {
 
     /// Pause execution at a function
     fn pause_at_function(&mut self, function: &str) {
-        println!("\n[BREAKPOINT] Paused at function: {}", function);
+        crate::logging::log_breakpoint(function);
         self.paused = true;
         self.state.set_current_function(function.to_string());
         self.state.call_stack().display();

@@ -46,7 +46,7 @@ impl CallStackInspector {
     /// Display the call stack
     pub fn display(&self) {
         if self.stack.is_empty() {
-            println!("Call Stack: (empty)");
+            tracing::info!("Call stack is empty");
             return;
         }
 
