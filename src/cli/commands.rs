@@ -116,6 +116,14 @@ pub fn run(args: RunArgs, _verbosity: Verbosity) -> Result<()> {
     if !args.storage_filter.is_empty() {
         let storage_filter = crate::inspector::storage::StorageFilter::new(&args.storage_filter)
             .map_err(|e| anyhow::anyhow!("Invalid storage filter: {}", e))?;
+        println!("\n--- Storage ---");
+        
+        // Get storage data from the executor
+        let storage_data = engine.executor().get_storage()
+            .map_err(|e| anyhow::anyhow!("Failed to get storage data: {}", e))?;
+        
+        // Create inspector with storage data
+        let inspector = crate::inspector::StorageInspector::new(&storage_data);
 
         print_info("\n--- Storage ---");
         tracing::info!("Displaying filtered storage");
@@ -183,6 +191,36 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
     let wasm_bytes = fs::read(&args.contract)
         .with_context(|| format!("Failed to read WASM file: {:?}", args.contract))?;
 
+    // Get module information
+    let module_info = crate::utils::wasm::get_module_info(&wasm_bytes)?;
+    
+    // Display header
+    println!("\n{}", "═".repeat(54));
+    println!("  Soroban Contract Inspector");
+    println!("  {}", "═".repeat(54));
+    println!("\n  File : {:?}", args.contract);
+    println!("  Size : {} bytes", wasm_bytes.len());
+
+    // Display module information
+    println!("\n{}", "─".repeat(54));
+    println!("  Module Information");
+    println!("  {}", "─".repeat(52));
+    println!("  Types      : {}", module_info.type_count);
+    println!("  Functions  : {}", module_info.function_count);
+    println!("  Exports    : {}", module_info.export_count);
+
+    // Display exported functions if requested
+    if args.functions {
+        println!("\n{}", "─".repeat(54));
+        println!("  Exported Functions");
+        println!("  {}", "─".repeat(52));
+        
+        let functions = crate::utils::wasm::parse_functions(&wasm_bytes)?;
+        if functions.is_empty() {
+            println!("  (No exported functions found)");
+        } else {
+            for func in functions {
+                println!("  • {}", func);
     print_info("\nContract Information:");
     println!("  Size: {} bytes", wasm_bytes.len());
     logging::log_contract_loaded(wasm_bytes.len());
@@ -201,7 +239,36 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
         }
     }
 
+    // Display metadata if requested
     if args.metadata {
+        println!("\n{}", "─".repeat(54));
+        println!("  Contract Metadata");
+        println!("  {}", "─".repeat(52));
+        
+        match crate::utils::wasm::extract_contract_metadata(&wasm_bytes) {
+            Ok(metadata) => {
+                if metadata.is_empty() {
+                    println!("  ⚠  No metadata section embedded in this contract");
+                } else {
+                    if let Some(version) = metadata.contract_version {
+                        println!("  Contract version      : {}", version);
+                    }
+                    if let Some(sdk) = metadata.sdk_version {
+                        println!("  Soroban SDK version   : {}", sdk);
+                    }
+                    if let Some(build_date) = metadata.build_date {
+                        println!("  Build date            : {}", build_date);
+                    }
+                    if let Some(author) = metadata.author {
+                        println!("  Author / organization : {}", author);
+                    }
+                    if let Some(desc) = metadata.description {
+                        println!("  Description           : {}", desc);
+                    }
+                    if let Some(impl_notes) = metadata.implementation {
+                        println!("  Implementation notes  : {}", impl_notes);
+                    }
+                }
         print_info("\nMetadata:");
         let metadata = crate::utils::wasm::extract_contract_metadata(&wasm_bytes)?;
 
@@ -223,12 +290,15 @@ pub fn inspect(args: InspectArgs, _verbosity: Verbosity) -> Result<()> {
             if let Some(desc) = metadata.description {
                 println!("  Description           : {}", desc);
             }
-            if let Some(impl_notes) = metadata.implementation {
-                println!("  Implementation notes  : {}", impl_notes);
+            Err(e) => {
+                println!("  Error reading metadata: {}", e);
+                println!("  (This may indicate a corrupted metadata section)");
             }
         }
     }
 
+    // Display footer
+    println!("\n{}", "═".repeat(54));
     Ok(())
 }
 
@@ -316,6 +386,11 @@ pub fn optimize(args: OptimizeArgs, _verbosity: Verbosity) -> Result<()> {
                 ));
             }
             Err(e) => {
+                eprintln!(
+                    "    ⚠  Failed to analyze function {}: {}",
+                    function_name, e
+                );
+                // Continue with other functions instead of stopping
                 print_warning(format!(
                     "    Warning: Failed to analyze function {}: {}",
                     function_name, e
