@@ -153,7 +153,7 @@ pub fn inspect(args: InspectArgs) -> Result<()> {
 }
 
 /// Parse JSON arguments into a string for now (will be improved later)
-fn parse_args(json: &str) -> Result<String> {
+pub fn parse_args(json: &str) -> Result<String> {
     // Basic validation
     serde_json::from_str::<serde_json::Value>(json)
         .with_context(|| format!("Invalid JSON arguments: {}", json))?;
@@ -161,7 +161,7 @@ fn parse_args(json: &str) -> Result<String> {
 }
 
 /// Parse JSON storage into a string for now (will be improved later)
-fn parse_storage(json: &str) -> Result<String> {
+pub fn parse_storage(json: &str) -> Result<String> {
     // Basic validation
     serde_json::from_str::<serde_json::Value>(json)
         .with_context(|| format!("Invalid JSON storage: {}", json))?;
